@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agent-os — supervision layer for AI agents</title>
+<meta name="description" content="A drop-in MCP server that gives any AI agent a verdict, a trust score, and a recovery plan. LLM-agnostic. MIT." />
+<meta property="og:title" content="agent-os — supervision layer for AI agents" />
+<meta property="og:description" content="Verdict (auto/supervised/escalate). Trust scores per category. Recovery plans on failure. MCP server. LLM-agnostic." />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Inter", ui-sans-serif, system-ui, sans-serif; }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(59,130,246,.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,.08) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .glow { box-shadow: 0 0 80px rgba(0,212,255,.15), 0 0 200px rgba(59,130,246,.1); }
+  .mono { font-family: "JetBrains Mono", "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body class="bg-[#0B0F1A] text-gray-100 antialiased">
+
+<!-- Hero -->
+<section class="grid-bg border-b border-white/5">
+  <div class="max-w-6xl mx-auto px-6 py-20 md:py-28">
+    <div class="flex items-center gap-3 mb-8 text-xs uppercase tracking-widest text-cyan-300/80">
+      <span class="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+      <span>Reaves Labs</span>
+      <span class="text-white/30">/</span>
+      <span class="text-white/60">agent-os v0.1.0</span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-bold leading-tight tracking-tight mb-6">
+      Ship agents that<br/>
+      <span class="bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">don't go off the rails.</span>
+    </h1>
+    <p class="text-lg md:text-xl text-white/70 max-w-2xl mb-10">
+      A drop-in supervision layer for AI agents. Every action gets a
+      verdict, every category accrues a trust score, every failure gets a
+      recovery plan. Speaks MCP. LLM-agnostic.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 mb-10">
+      <code class="mono bg-black/40 border border-white/10 px-5 py-4 rounded-lg text-cyan-300 text-sm md:text-base">
+        npm install -g @reaves-labs/agent-os
+      </code>
+      <a href="#quickstart" class="inline-flex items-center justify-center px-5 py-4 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:from-cyan-400 hover:to-blue-400 transition">
+        30-second quickstart →
+      </a>
+    </div>
+    <div class="flex flex-wrap gap-2 text-xs">
+      <span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70">MCP server</span>
+      <span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70">CLI</span>
+      <span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70">SQLite, no service</span>
+      <span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70">Anthropic · OpenAI · Ollama · any OAI-compatible</span>
+      <span class="px-3 py-1.5 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-300">MIT</span>
+    </div>
+  </div>
+</section>
+
+<!-- The thesis -->
+<section class="max-w-6xl mx-auto px-6 py-20">
+  <h2 class="text-3xl md:text-4xl font-bold mb-4">If an agent is the user, software needs <span class="text-cyan-300">machine-native paths, permissions, and recovery.</span></h2>
+  <p class="text-white/60 max-w-3xl mb-12">YC Request for Startups #12. Most agent stacks today are a router + a model + a tool dispatcher. None of them have the supervision substrate that turns "the model said do X" into "do X only if the trust score for X is above the floor, and only if X is reversible." This is that substrate.</p>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <div class="rounded-xl border border-white/10 bg-white/5 p-6">
+      <div class="text-cyan-300 mono text-xs mb-3">PATHS</div>
+      <h3 class="font-semibold mb-2">Machine-native filesystem</h3>
+      <p class="text-sm text-white/60">Outbox for auto-approved writes. Approval queue for anything risky. Drop a file, get a verdict.</p>
+    </div>
+    <div class="rounded-xl border border-white/10 bg-white/5 p-6">
+      <div class="text-cyan-300 mono text-xs mb-3">PERMISSIONS</div>
+      <h3 class="font-semibold mb-2">Per-category trust scores</h3>
+      <p class="text-sm text-white/60">Capability × Quality × Impact = worth. Worth compounds into a trust score that gates the next verdict.</p>
+    </div>
+    <div class="rounded-xl border border-white/10 bg-white/5 p-6">
+      <div class="text-cyan-300 mono text-xs mb-3">RECOVERY</div>
+      <h3 class="font-semibold mb-2">Plans on failure</h3>
+      <p class="text-sm text-white/60">When an action fails, the supervisor returns a structured retry / rollback / escalate plan. Not just an error.</p>
+    </div>
+  </div>
+</section>
+
+<!-- The four primitives -->
+<section class="border-y border-white/5 bg-white/[0.02]">
+  <div class="max-w-6xl mx-auto px-6 py-20">
+    <h2 class="text-3xl md:text-4xl font-bold mb-12">Four tools. That's it.</h2>
+    <div class="space-y-6">
+
+      <div class="rounded-xl border border-white/10 bg-black/30 p-6 md:p-8">
+        <div class="flex items-baseline gap-3 mb-3">
+          <code class="mono text-cyan-300 text-lg">submit_action</code>
+          <span class="text-xs text-white/40">→ verdict + trust score</span>
+        </div>
+        <p class="text-white/70 mb-4">Agent says "I want to do X." Returns auto / supervised / escalate. Auto goes straight to outbox; the rest goes to the human approval queue.</p>
+        <pre class="mono text-xs md:text-sm bg-black/60 rounded-lg p-4 overflow-x-auto text-cyan-100">{
+  "agentId":        "trader-7",
+  "category":       "place_trade",
+  "action":         "Open $200 BTC long at market",
+  "irreversibility":"irreversible"
+}</pre>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-black/30 p-6 md:p-8">
+        <div class="flex items-baseline gap-3 mb-3">
+          <code class="mono text-cyan-300 text-lg">record_outcome</code>
+          <span class="text-xs text-white/40">→ updated trust score</span>
+        </div>
+        <p class="text-white/70 mb-4">After execution, report the three axes. capability × quality × impact moves the rolling trust score for that category.</p>
+        <pre class="mono text-xs md:text-sm bg-black/60 rounded-lg p-4 overflow-x-auto text-cyan-100">{
+  "actionId":   "...",
+  "success":    true,
+  "capability": 1.0,
+  "quality":    0.85,
+  "impact":     0.7
+}</pre>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-black/30 p-6 md:p-8">
+        <div class="flex items-baseline gap-3 mb-3">
+          <code class="mono text-cyan-300 text-lg">get_routing</code>
+          <span class="text-xs text-white/40">→ which sub-agent should own this</span>
+        </div>
+        <p class="text-white/70">Hand a task description, get a single role back with a confidence score and one-sentence rationale. Use it to fan out.</p>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-black/30 p-6 md:p-8">
+        <div class="flex items-baseline gap-3 mb-3">
+          <code class="mono text-cyan-300 text-lg">recover</code>
+          <span class="text-xs text-white/40">→ structured retry / rollback / escalate</span>
+        </div>
+        <p class="text-white/70">Submit a failed action ID + error message. Get back a structured plan: a tighter prompt to retry with, a rollback step, or an escalation target.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LLM-agnostic -->
+<section class="max-w-6xl mx-auto px-6 py-20">
+  <h2 class="text-3xl md:text-4xl font-bold mb-4">The supervisor is <span class="text-cyan-300">not Claude</span>. Or OpenAI. Or anyone.</h2>
+  <p class="text-white/60 max-w-3xl mb-10">
+    A supervisor is a decision-maker, not a brand. agent-os ships with four backends out of the box and a generic adapter for everything OpenAI-compatible. Run it on free local Ollama or on a frontier API — the engine doesn't care.
+  </p>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="rounded-xl border border-white/10 bg-white/5 p-6">
+      <h3 class="font-semibold mb-3">Pick by env var</h3>
+      <pre class="mono text-xs bg-black/60 rounded-lg p-4 overflow-x-auto text-cyan-100">AGENT_OS_SUPERVISOR=ollama       # free, local
+AGENT_OS_SUPERVISOR=anthropic    # frontier
+AGENT_OS_SUPERVISOR=openai       # frontier
+AGENT_OS_SUPERVISOR=generic      # any OAI-compatible
+                                 # (Groq, Together, vLLM, llama.cpp)</pre>
+    </div>
+    <div class="rounded-xl border border-white/10 bg-white/5 p-6">
+      <h3 class="font-semibold mb-3">Or pass one in</h3>
+      <pre class="mono text-xs bg-black/60 rounded-lg p-4 overflow-x-auto text-cyan-100">import { AgentOS } from "@reaves-labs/agent-os";
+
+const os = new AgentOS({
+  supervisor: { backend: "ollama", model: "llama3.2" }
+});</pre>
+    </div>
+  </div>
+</section>
+
+<!-- Quickstart -->
+<section id="quickstart" class="border-y border-white/5 bg-white/[0.02]">
+  <div class="max-w-6xl mx-auto px-6 py-20">
+    <h2 class="text-3xl md:text-4xl font-bold mb-12">30-second quickstart</h2>
+    <ol class="space-y-6">
+      <li class="flex gap-5">
+        <div class="mono text-cyan-300 text-xl">1.</div>
+        <div class="flex-1">
+          <p class="font-medium mb-2">Install</p>
+          <pre class="mono text-xs md:text-sm bg-black/60 rounded-lg p-4 text-cyan-100">npm install -g @reaves-labs/agent-os</pre>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <div class="mono text-cyan-300 text-xl">2.</div>
+        <div class="flex-1">
+          <p class="font-medium mb-2">Submit an action from the CLI</p>
+          <pre class="mono text-xs md:text-sm bg-black/60 rounded-lg p-4 text-cyan-100">agent-os submit send_email "Email Jane the Q3 deck" \
+  --irreversibility=external</pre>
+          <p class="text-xs text-white/50 mt-2">Returns a verdict. Reversible action goes to <code class="mono text-cyan-300">~/.agent-os/outbox/</code>; risky goes to <code class="mono text-cyan-300">~/.agent-os/queues/approval/</code>.</p>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <div class="mono text-cyan-300 text-xl">3.</div>
+        <div class="flex-1">
+          <p class="font-medium mb-2">Wire it as an MCP server</p>
+          <p class="text-sm text-white/60 mb-3">Add to your agent client's MCP config (Claude Desktop, Cursor, OpenAI Codex, custom):</p>
+          <pre class="mono text-xs md:text-sm bg-black/60 rounded-lg p-4 text-cyan-100">{
+  "mcpServers": {
+    "agent-os": { "command": "agent-os-mcp" }
+  }
+}</pre>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- Why different -->
+<section class="max-w-6xl mx-auto px-6 py-20">
+  <h2 class="text-3xl md:text-4xl font-bold mb-10">Why this is different from "just use a guardrails library"</h2>
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="rounded-xl border border-white/10 bg-white/5 p-6">
+      <h3 class="text-white/40 text-sm uppercase tracking-wider mb-3">What guardrails libraries do</h3>
+      <ul class="space-y-2 text-white/70 text-sm">
+        <li>→ Static rules per call</li>
+        <li>→ Pass / fail at the moment of inference</li>
+        <li>→ No memory across actions</li>
+        <li>→ No notion of irreversibility</li>
+        <li>→ No recovery plan when something breaks</li>
+      </ul>
+    </div>
+    <div class="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-6">
+      <h3 class="text-cyan-300 text-sm uppercase tracking-wider mb-3">What agent-os does</h3>
+      <ul class="space-y-2 text-white/90 text-sm">
+        <li>→ Per-category trust scores that compound</li>
+        <li>→ Three-axis verdict (auto / supervised / escalate)</li>
+        <li>→ SQLite memory of every action and outcome</li>
+        <li>→ Irreversibility floor: irreversible = always escalate</li>
+        <li>→ Structured recovery plans, not raw errors</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="border-t border-white/5 bg-black/30">
+  <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div>
+      <div class="text-sm text-white/60">Reaves Labs and Learning, LLC</div>
+      <div class="text-xs text-white/40 mt-1">@Reaves_Labs · MIT licensed · v0.1.0</div>
+    </div>
+    <div class="flex gap-4 text-sm text-white/60">
+      <a class="hover:text-cyan-300" href="https://github.com/reaves-labs/agent-os">GitHub</a>
+      <a class="hover:text-cyan-300" href="https://www.npmjs.com/package/@reaves-labs/agent-os">npm</a>
+      <a class="hover:text-cyan-300" href="#quickstart">Quickstart</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "name": "@reaves-labs/agent-os",
+  "version": "0.1.0",
+  "description": "LLM-agnostic supervision layer for AI agents — verdicts, trust scores, recovery. Drop-in MCP server + CLI.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./engine": {
+      "import": "./dist/engine.js",
+      "types": "./dist/engine.d.ts"
+    },
+    "./supervisors": {
+      "import": "./dist/supervisors/index.js",
+      "types": "./dist/supervisors/index.d.ts"
+    }
+  },
+  "bin": {
+    "agent-os": "./bin/agent-os.mjs",
+    "agent-os-mcp": "./dist/server.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "prompts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/server.js",
+    "smoke": "node bin/agent-os.mjs status",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agents",
+    "supervision",
+    "agent-os",
+    "llm-agnostic",
+    "ai-agents",
+    "trust-scores",
+    "verifier"
+  ],
+  "author": "Reaves Labs and Learning, LLC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "better-sqlite3": "^11.3.0",
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.3"
+  }
+}
