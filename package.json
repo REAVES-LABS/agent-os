@@ -35,7 +35,9 @@
     "dev": "tsc --watch",
     "start": "node dist/server.js",
     "smoke": "node bin/agent-os.mjs status",
-    "prepublishOnly": "npm run build"
+    "pretest": "npm run build",
+    "test": "node --test --test-reporter=spec test/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "mcp",
