@@ -1,6 +1,6 @@
 {
   "name": "@reaves-labs/agent-os",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.1",
   "description": "LLM-agnostic supervision layer for AI agents — verdicts, trust scores, recovery. Drop-in MCP server + CLI.",
   "type": "module",
   "main": "./dist/index.js",
