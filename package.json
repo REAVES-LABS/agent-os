@@ -50,6 +50,19 @@
   ],
   "author": "Reaves Labs and Learning, LLC",
   "license": "MIT",
+  "homepage": "https://reaveslabs.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reaves-labs/agent-os.git"
+  },
+  "bugs": {
+    "url": "https://github.com/reaves-labs/agent-os/security/advisories",
+    "email": "security@reaveslabs.ai"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=20.0.0"
   },
