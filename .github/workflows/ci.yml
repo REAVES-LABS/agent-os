@@ -65,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           paths-ignore: |
@@ -78,7 +78,7 @@ jobs:
       - name: Build for analysis
         run: npm run build
       - name: Run CodeQL
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
   smoke-test:
     runs-on: ubuntu-latest
