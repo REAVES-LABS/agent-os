@@ -31,12 +31,20 @@ jobs:
       - run: npm run build
       - name: Verify package contents
         run: |
-          npm pack --dry-run > /tmp/pack.txt
-          cat /tmp/pack.txt
-          grep -q 'dist/' /tmp/pack.txt
-          grep -q 'bin/' /tmp/pack.txt
-          grep -q 'README.md' /tmp/pack.txt
-          grep -q 'LICENSE' /tmp/pack.txt
+          npm pack --dry-run --json > /tmp/pack.json
+          node -e "
+            const p = JSON.parse(require('fs').readFileSync('/tmp/pack.json', 'utf8'))[0];
+            const paths = p.files.map(f => f.path);
+            const exact = ['README.md', 'LICENSE'];
+            const prefixes = ['dist/', 'bin/'];
+            for (const x of exact) {
+              if (!paths.includes(x)) { console.error('missing:', x); process.exit(1); }
+            }
+            for (const px of prefixes) {
+              if (!paths.some(f => f.startsWith(px))) { console.error('missing prefix:', px); process.exit(1); }
+            }
+            console.log('verified', paths.length, 'files in', p.filename);
+          "
       - name: Determine dist-tag
         id: dist
         run: |
