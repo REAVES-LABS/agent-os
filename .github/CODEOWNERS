@@ -1,0 +1,29 @@
+# CODEOWNERS — required reviewers for security-sensitive paths.
+#
+# Once Phase 2 opens (PRs accepted), changes touching these paths
+# require explicit approval from a CODEOWNER before merge.
+#
+# Phase 1: this file is informational. PRs aren't accepted yet.
+
+# Default — all changes
+* @reaves-labs
+
+# Security-sensitive: supervision logic (the heart of agent-os)
+/src/supervisors/**       @reaves-labs
+/src/engine.ts            @reaves-labs
+/src/effectors.ts         @reaves-labs
+
+# Security-sensitive: anything that touches secrets or external APIs
+/src/store.ts             @reaves-labs
+/src/server.ts            @reaves-labs
+
+# Security policy + threat model — only maintainer changes
+/SECURITY.md              @reaves-labs
+/THREAT-MODEL.md          @reaves-labs
+/CODE_OF_CONDUCT.md       @reaves-labs
+
+# CI / build config — supply-chain critical
+/.github/**               @reaves-labs
+/package.json             @reaves-labs
+/package-lock.json        @reaves-labs
+/tsconfig.json            @reaves-labs

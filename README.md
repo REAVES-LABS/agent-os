@@ -2,6 +2,10 @@
 
 > Ship agents that don't go off the rails.
 
+> [!IMPORTANT]
+> **2026-05-07 — Source-available preview (Phase 1).**
+> The code is here for evaluation, transparency, and validation. **Pull requests and public issues are not yet accepted** — see [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the phased OSS plan and [`SECURITY.md`](./SECURITY.md) for vulnerability reports.
+
 A drop-in supervision layer for AI agents. Speaks **MCP**. **LLM-agnostic** —
 swap Anthropic, OpenAI, Ollama, or any OpenAI-compatible endpoint with one
 env var. Persists to SQLite, writes to a filesystem outbox, queues risky
