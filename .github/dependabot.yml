@@ -1,0 +1,43 @@
+# Dependabot config for @reaves-labs/agent-os
+# Watches:
+#   - npm dependencies (security + version updates)
+#   - GitHub Actions versions used in workflows
+#
+# PRs are filed but not auto-merged — review every change before
+# accepting, especially for transitive deps.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    groups:
+      production-deps:
+        dependency-type: production
+      dev-deps:
+        dependency-type: development
+    commit-message:
+      prefix: deps
+      include: scope
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - dependencies
+      - ci
