@@ -42,18 +42,30 @@ agent-os serve
 
 ## Pick a supervisor backend
 
-The supervisor is a decision-maker, not a brand. Any LLM that can return
-JSON can play the role.
+The "supervisor" is whichever LLM you want grading proposed actions and
+returning verdicts. agent-os doesn't care which — it's a decision-maker
+role, not a brand. Pick the one whose latency, cost, and quality fit the
+risk profile of your agent:
+
+- **Ollama** — free, local, no network. Best default for development and
+  for any agent supervising irreversible actions where you don't want
+  prompts leaving the machine.
+- **Anthropic** — strongest verdict quality at production cost. Best when
+  the supervisor's "why" matters because a human will read it.
+- **OpenAI** — fast, cheap with `gpt-4o-mini`. Best for high-volume,
+  low-stakes supervision.
+- **Generic** — anything OpenAI-compatible (Groq for ~10× faster, vLLM
+  for self-hosted, Together / llama.cpp for whatever fits your infra).
 
 ```bash
 export AGENT_OS_SUPERVISOR=ollama       # free local (default fallback)
 export AGENT_OS_SUPERVISOR=anthropic    # ANTHROPIC_API_KEY
 export AGENT_OS_SUPERVISOR=openai       # OPENAI_API_KEY
-export AGENT_OS_SUPERVISOR=generic      # Groq, Together, vLLM, llama.cpp
-                                        # AGENT_OS_BASE_URL + AGENT_OS_API_KEY
+export AGENT_OS_SUPERVISOR=generic      # AGENT_OS_BASE_URL + AGENT_OS_API_KEY
 ```
 
-Autodetect order: `ANTHROPIC_API_KEY` → `OPENAI_API_KEY` → Ollama at `localhost:11434`.
+If you don't set the env var, agent-os auto-detects in order:
+`ANTHROPIC_API_KEY` → `OPENAI_API_KEY` → Ollama at `localhost:11434`.
 
 ## Wire it into an MCP client
 
@@ -91,8 +103,16 @@ Tells you exactly when to pick agent-os and when to pick the alternatives.
 
 ## The four MCP tools
 
-### `submit_action`
-Agent submits a proposed action; gets back a verdict.
+These are the four things your agent can call. Two are part of every
+turn (`submit_action` + `record_outcome`); two are situational (`get_routing`
+when you want a routing suggestion, `recover` when an action fails).
+
+### `submit_action` — *"I want to do X. Should I?"*
+
+Your agent describes a proposed action and gets back a verdict. agent-os
+routes it to the right role, asks the supervisor to grade it, applies the
+irreversibility floor, persists the decision, and writes the action to
+either the outbox (`auto`) or the approval queue (`supervised` / `escalate`).
 
 | input | type | description |
 |---|---|---|
@@ -104,11 +124,16 @@ Agent submits a proposed action; gets back a verdict.
 
 Returns: `{ actionId, verdict, score, why, routedTo, effectPath, trustScoreAfter }`.
 
-- **`auto`** → file written to `~/.agent-os/outbox/<role>/`
-- **`supervised`** or **`escalate`** → file queued at `~/.agent-os/queues/approval/`
+- **`auto`** → file written to `~/.agent-os/outbox/<role>/` — execute it
+- **`supervised`** or **`escalate`** → file queued at `~/.agent-os/queues/approval/` — wait for human approval
 
-### `record_outcome`
-After execution, report back. capability × quality × impact = worth.
+### `record_outcome` — *"It worked / it didn't."*
+
+After the action actually runs, your agent reports the result. agent-os
+computes `worth = capability × quality × impact` and updates the trust
+score for that category. Without outcomes, trust never moves — so the
+agent never earns auto-execute, and proven categories never get rewarded.
+**Always pair `submit_action` with `record_outcome`.**
 
 | input | type | description |
 |---|---|---|
@@ -121,15 +146,28 @@ After execution, report back. capability × quality × impact = worth.
 
 Returns: `{ worth, trustScoreBefore, trustScoreAfter, category }`.
 
-### `get_routing`
-Hand a description, get a sub-agent role recommendation.
+### `get_routing` — *"Which role should handle this?"*
 
-### `recover`
-Submit a failed `actionId` + error, get a structured retry / rollback / escalate plan.
+Hand it a free-text description; get back a role recommendation
+(`writer`, `code`, `analyst`, etc.) plus a confidence. Useful when your
+agent needs to dispatch work but doesn't already know which sub-agent
+should own it. Most callers don't need this — `submit_action` does its
+own routing internally.
+
+### `recover` — *"This action failed. What now?"*
+
+Submit a failed `actionId` plus the error. The supervisor returns a
+structured plan — retry with different inputs, rollback what happened,
+or escalate to a human. Designed so your agent doesn't have to invent a
+recovery strategy on the fly.
 
 ---
 
 ## Library use
+
+If you'd rather embed agent-os directly in your own Node code than run
+it as an MCP server, the entire surface is one class. Same supervision,
+same trust scores, same safety floor — no MCP server process required.
 
 ```ts
 import { AgentOS } from "@reaves-labs/agent-os";
@@ -139,20 +177,27 @@ const os = new AgentOS({
   workdir: "./.agent-os",
 });
 
+// Your agent proposes an action — gets back a verdict
 const verdict = await os.submit({
   agentId: "trader-7",
   category: "place_trade",
   action: "Open $200 BTC long at market",
   irreversibility: "irreversible",
 });
-// verdict.verdict === "escalate"  (irreversibility floor)
+// verdict.verdict === "escalate"  (irreversibility floor — even if
+// the supervisor LLM said "auto/0.99", the gate forces escalation)
 
+// After the action actually runs (or doesn't), report back
 await os.recordOutcome({
   actionId: verdict.actionId,
   success: true,
   capability: 1, quality: 0.9, impact: 0.7,
 });
 ```
+
+This is the same code path the MCP server uses internally. Pick MCP for
+multi-agent / cross-language setups; pick library for tightly-coupled
+single-process Node agents.
 
 ---
 
@@ -214,13 +259,26 @@ start, LCB asymptote, decay-driven drop, uncertainty penalty).
 
 ## Why not just use a guardrails library?
 
+Most guardrails libraries (NeMo Guardrails, Guardrails AI, Llama Guard)
+make a *pass/fail decision per call* against rules you wrote up front.
+That works — but it's stateless: every call is graded fresh, with no
+memory of how this kind of action has gone before, and the LLM is in
+the safety decision (which means a confident-but-wrong LLM can talk
+itself past the rule). agent-os is built around the opposite shape:
+
 | Guardrails libs | agent-os |
 |---|---|
 | Static rules per call | Per-category trust scores that compound |
-| Pass/fail at inference time | Three-axis verdict (auto/supervised/escalate) |
+| Pass/fail at inference time | Three-axis verdict (auto / supervised / escalate) |
 | No memory across actions | SQLite memory of every action and outcome |
-| No notion of irreversibility | Irreversibility floor: irreversible = always escalate |
+| No notion of irreversibility | Irreversibility floor: irreversible always escalates |
 | Raw errors on failure | Structured recovery plans |
+
+Many production stacks use both. Guardrails libraries to validate the
+*content* of an LLM's output ("is this JSON valid, does it leak PII");
+agent-os to gate *whether the resulting action runs* ("we've seen 50
+bad outcomes from this category lately — hold this one for review").
+See [`docs/COMPARE.md`](./docs/COMPARE.md) for the full head-to-head.
 
 ---
 
