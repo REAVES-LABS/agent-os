@@ -67,6 +67,83 @@ When the project graduates to full-OSS (v1.0+):
 
 ---
 
+## Versioning & deprecation policy
+
+This section is the API-stability contract between `@reaves-labs/agent-os`
+and its users. Read this before pinning a version in production.
+
+### Pre-1.0 (current — `0.x` line)
+
+- `0.x` is **explicitly unstable** in the SemVer sense. The exported API
+  is allowed to change between *minor* versions (`0.1` → `0.2`).
+- We will document **every breaking change** in [`CHANGELOG.md`](./CHANGELOG.md)
+  under `### Changed` with a one-paragraph migration guide.
+- Bumps within a minor version (`0.1.0` → `0.1.1`) follow patch semantics:
+  bug fixes and security patches only, no API changes.
+- We commit to **at most one breaking change per minor version** in 0.x.
+  If a release accumulates more, we split it.
+
+### Post-1.0 (target Q1-Q2 2027 — see [`ROADMAP.md`](./ROADMAP.md))
+
+- Strict [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html). No breaking
+  changes except in major versions.
+- Breaking changes ship in `2.0.0`, `3.0.0`, etc., never in `1.x`.
+- Long-term-support (LTS) branch starts at `1.0.0` with security backports
+  for ≥18 months after the next major releases.
+
+### Deprecation timing
+
+- A function, type, or behavior marked `@deprecated` in the API will
+  remain in the codebase for **at least one minor version** before
+  removal in `0.x`, and **at least one major version** post-1.0.
+- Deprecation notices include a target removal version and a migration
+  path (e.g., "use `submitMany()` instead — removal in 0.4.0").
+- Runtime deprecation warnings emit on first use unless
+  `AGENT_OS_SILENCE_DEPRECATIONS=1`.
+
+### What "breaking change" means in practice
+
+We consider these **breaking** (require minor bump in 0.x, major post-1.0):
+
+- Removing or renaming any exported symbol (`AgentOS`, `Store`, types, etc.)
+- Changing the signature of any exported method in a non-additive way
+- Changing the wire format of MCP tool inputs/outputs
+- Changing the SQLite schema in a way that's not backward-compatible (we
+  forward-migrate; we don't break readers of older DBs without a major)
+- Changing the `gate()` decision table — adding new safety floors is
+  **not** breaking; relaxing them **is**
+
+We consider these **not breaking** (patch in 0.x, minor post-1.0):
+
+- Adding new exported methods, types, or supervisor backends
+- Adding optional parameters with safe defaults
+- Performance improvements that don't change observable behavior
+- Tightening the `gate()` decision (more escalation, never less)
+
+### How to depend on this safely
+
+For production deployments, pin the minor version:
+
+```jsonc
+// package.json
+{
+  "dependencies": {
+    "@reaves-labs/agent-os": "0.1.x"  // patches OK, no minor jumps
+  }
+}
+```
+
+Once we ship 1.0, you can safely use the standard caret range (`^1.0.0`).
+
+If you want to track our pre-release work, the `rc` dist-tag points at
+the latest prerelease (when one exists):
+
+```bash
+npm install @reaves-labs/agent-os@rc
+```
+
+---
+
 ## Code of conduct
 
 All interactions — email, issues (when open), PRs (when open), Discussions — are governed by [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
