@@ -70,6 +70,8 @@ Autodetect order: `ANTHROPIC_API_KEY` → `OPENAI_API_KEY` → Ollama at `localh
 }
 ```
 
+📖 **Full 5-minute walkthrough:** [examples/claude-code/README.md](./examples/claude-code/README.md) — install → wire up → submit a real action → watch the trust score evolve.
+
 ### Cursor
 
 Same shape, in `~/.cursor/mcp.json`.
@@ -77,6 +79,11 @@ Same shape, in `~/.cursor/mcp.json`.
 ### Anything else that speaks MCP
 
 `agent-os-mcp` runs as a stdio MCP server — point any compliant client at it.
+
+## How does this compare to NeMo Guardrails / Guardrails AI / AgentOps?
+
+Honest comparison with no hand-waving: [docs/COMPARE.md](./docs/COMPARE.md).
+Tells you exactly when to pick agent-os and when to pick the alternatives.
 
 ---
 

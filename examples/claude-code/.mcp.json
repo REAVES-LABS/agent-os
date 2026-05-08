@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agent-os": {
+      "command": "agent-os-mcp",
+      "env": {
+        "AGENT_OS_SUPERVISOR": "ollama",
+        "AGENT_OS_MODEL": "llama3.2",
+        "OLLAMA_URL": "http://localhost:11434"
+      }
+    }
+  }
+}
