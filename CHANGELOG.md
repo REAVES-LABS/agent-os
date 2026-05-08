@@ -23,10 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.1.0] — 2026-05-07
 
-First public source-available preview. The four MCP tools, the four
-supervisor backends, the SQLite store, and the filesystem effectors are
-all in place. PRs are not accepted yet (see [CONTRIBUTING.md](./CONTRIBUTING.md));
-this release is for **evaluation, transparency, and validation** only.
+**What you get in this release:** a working drop-in supervisor that
+sits between your AI agent and the actions it wants to take. Every
+proposed action gets a verdict (run unattended / hold for review /
+bounce back), with a confidence score that learns over time and a
+hard safety floor for actions you can't undo. Speaks MCP out of the
+box; works with Claude / GPT / Ollama / any OpenAI-compatible endpoint.
+
+This is a source-available preview — read it, run it locally, evaluate
+it. PRs are not accepted yet (see [CONTRIBUTING.md](./CONTRIBUTING.md))
+and full open contribution opens with v0.2 per [ROADMAP.md](./ROADMAP.md).
 
 ### Added
 - **Public API surface** (`@reaves-labs/agent-os`):

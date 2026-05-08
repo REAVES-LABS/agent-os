@@ -69,8 +69,20 @@ When the project graduates to full-OSS (v1.0+):
 
 ## Versioning & deprecation policy
 
-This section is the API-stability contract between `@reaves-labs/agent-os`
-and its users. Read this before pinning a version in production.
+**The short version:** if you're about to use this in production, pin
+the minor version (`"@reaves-labs/agent-os": "0.1.x"`) so patch fixes
+flow in but breaking changes don't surprise you. Once we ship v1.0,
+the standard `"^1.0.0"` is safe — at v1.0 we promise no breaking
+changes within the major version, and we follow [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)
+strictly forever after.
+
+**Why pre-1.0 needs special care:** during 0.x we may need to change the
+shape of `submit()` or the wire format of MCP tools as the design
+matures. Every breaking change is documented in [`CHANGELOG.md`](./CHANGELOG.md)
+with a one-paragraph migration guide, but we don't want to surprise you
+mid-deploy.
+
+The detail follows.
 
 ### Pre-1.0 (current — `0.x` line)
 

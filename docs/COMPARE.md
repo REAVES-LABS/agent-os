@@ -42,8 +42,15 @@ because trust scores are persisted state.
 
 ### vs. **NeMo Guardrails** — github.com/NVIDIA/NeMo-Guardrails
 
-NeMo is the heavyweight in this category. Production-tested at NVIDIA scale,
-backed by a real corporation, large community.
+**What using NeMo feels like:** you write rules in their custom language
+(Colang) describing how the agent should behave — what topics it can
+discuss, what jailbreak patterns to block, what to fall back to. Mature,
+production-tested at NVIDIA, backed by a real corporation, large community.
+
+**What using agent-os feels like instead:** you call one method per action
+(`submit_action`), get a verdict back, record the outcome when it's done.
+No DSL to learn. The library learns which categories are safe to trust
+based on what actually happens, rather than what you said in a policy.
 
 | Dimension | agent-os | NeMo Guardrails |
 |---|---|---|
@@ -68,8 +75,15 @@ framework.
 
 ### vs. **Guardrails AI** — github.com/guardrails-ai/guardrails
 
-Different problem in the same neighborhood. Guardrails AI checks *outputs*
-against schemas; agent-os gates *actions* against trust + irreversibility.
+**What using Guardrails AI feels like:** you wrap your LLM call with
+schema-style validators that check the *output* before passing it
+downstream — "is this valid JSON," "does this match a Pydantic schema,"
+"is the answer free of PII." If a check fails, you can re-ask the LLM.
+
+**What using agent-os feels like instead:** you don't gate the *output*,
+you gate the *action* the agent wants to take with it. Same neighborhood,
+different problem. Many teams use both — Guardrails AI to validate the
+content, agent-os to gate whether the resulting action runs.
 
 | Dimension | agent-os | Guardrails AI |
 |---|---|---|
@@ -105,6 +119,17 @@ These projects record traces and grade them after the fact. agent-os runs
 *in front* of the action, not after.
 
 ### vs. **AgentOps** — github.com/AgentOps-AI/agentops
+
+**What using AgentOps feels like:** you instrument your agent code to
+emit traces of every step (LLM call, tool use, decision), and then you
+debug / replay / analyze them in their web dashboard. You see what the
+agent did, what it cost, where it got stuck. Great for post-mortems.
+
+**What using agent-os feels like instead:** instead of recording what
+happened, you decide *whether it should happen* before the action fires.
+agent-os runs at the gate; AgentOps runs at the recorder. Most production
+agent stacks should have both — the gate to prevent disasters, the
+recorder to debug them when they slip through.
 
 | Dimension | agent-os | AgentOps |
 |---|---|---|

@@ -26,10 +26,12 @@ This roadmap closes those gaps in three releases.
 
 ## v0.1.1 — Provenance unblocking (target: ≤ 14 days from v0.1.0)
 
-The single blocker. v0.1.0 was published manually with a recovery code
-because npm's UI does not currently expose a way to add a TOTP
-authenticator alongside an existing security key on this account. CI
-provenance via GitHub OIDC + sigstore requires that path.
+**Why this version exists:** when you `npm install @reaves-labs/agent-os`,
+you should be able to cryptographically verify the tarball came from this
+exact source repo, this exact commit, this exact CI run. That's called
+*provenance attestation*. v0.1.0 doesn't have it yet because of an
+account-level npm UI restriction we're working around. v0.1.1 closes
+that gap and turns this guarantee on for every release going forward.
 
 **Scope:**
 - Resolve the npm-side TOTP-add restriction (open support ticket, follow
@@ -45,7 +47,13 @@ provenance via GitHub OIDC + sigstore requires that path.
 
 ## v0.2.0 — Adoption-grade polish (target: 6-8 weeks from v0.1.0)
 
-The features that close the most painful gaps competitors have today.
+**Why this version exists:** v0.1.0 is a working primitive. v0.2 is the
+version a senior engineer evaluating it would actually adopt. It closes
+the painful gaps every competitor has today — slow verifications that
+block the agent loop, no way to wire it into a dashboard, no proof that
+the supervisor's verdicts are unbiased — and adds the docs site and
+five reference integrations that take a stranger from "what is this" to
+"running in production" without a sales call.
 
 ### Streaming verdicts ([gap vs Guardrails AI, NeMo, AgentOps](./docs/COMPARE.md))
 - `submit()` returns an async iterable for incremental verdict tokens
@@ -92,8 +100,13 @@ The features that close the most painful gaps competitors have today.
 
 ## v0.3.0 — Production-grade primitives (target: ~Q4 2026)
 
-Features that move the needle from "credible primitive" to "real
-production tool."
+**Why this version exists:** v0.2 is good enough for a careful solo dev
+or a small team. v0.3 is what an enterprise security team would sign
+off on — a tamper-evident audit log they can prove hasn't been edited, a
+recovery system that actually executes plans rather than just suggesting
+them, cost-aware routing so you don't burn $0.10 of LLM call to verify a
+$0.001 action, and a Python SDK so the LangChain world can use it without
+language barriers.
 
 ### Tamper-evident audit log
 - Hash-chained append-only log alongside SQLite
@@ -132,8 +145,12 @@ production tool."
 
 ## v1.0 — Stable contract (target: ~Q1-Q2 2027)
 
-Once the API has had ~6 months of v0.x stable, we tag v1.0 with a strict
-SemVer commitment.
+**Why this version exists:** at v1.0, you can pin a major version in
+production and trust that we won't break your code without warning, for
+years. That's a meaningful promise — most early-stage OSS keeps changing
+its API for a long time. v1.0 is when we make a contract: we have lived
+with the design for ≥6 months, had it audited, watched real customers
+besides BLOOM use it, and we're confident enough to commit.
 
 ### Hard requirements before tagging v1.0
 - ≥6 months without a breaking change in v0.x line
