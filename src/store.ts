@@ -37,16 +37,38 @@ CREATE TABLE IF NOT EXISTS outcomes (
   FOREIGN KEY (action_id) REFERENCES actions(action_id)
 );
 
+-- Trust uses a Beta-Bernoulli posterior with time decay.
+--   alpha = prior_alpha + sum(worth_i * decay_i)
+--   beta  = prior_beta  + sum((1 - worth_i) * decay_i)
+--   mean  = alpha / (alpha + beta)
+--   stddev = sqrt(alpha * beta / ((alpha+beta)^2 * (alpha+beta+1)))
+--   score = lower_confidence_bound = mean - z * stddev   (z=1.96 for 95% LCB)
+-- The LCB is what gets persisted as the score column and consumed by the gate.
+-- New categories start with alpha=beta=2 (uniform-ish prior) which gives
+-- a deliberately conservative score around 0.31 — earn trust before
+-- you can auto-execute.
 CREATE TABLE IF NOT EXISTS trust (
-  category     TEXT PRIMARY KEY,
-  score        REAL NOT NULL,
-  n            INTEGER NOT NULL,
-  updated_at   TEXT NOT NULL
+  category      TEXT PRIMARY KEY,
+  score         REAL NOT NULL,    -- lower-confidence-bound, 0..1
+  n             INTEGER NOT NULL, -- effective observation count
+  alpha         REAL NOT NULL,    -- Beta posterior alpha (successes-weight)
+  beta          REAL NOT NULL,    -- Beta posterior beta  (failures-weight)
+  last_worth    REAL,             -- last observed worth (for diagnostics)
+  updated_at    TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_outcomes_action ON outcomes(action_id);
 CREATE INDEX IF NOT EXISTS idx_actions_category ON actions(category);
 `;
+
+// Bayesian trust parameters. Tunable via constructor cfg later.
+const PRIOR_ALPHA = 2;       // mean = 0.5, variance moderate
+const PRIOR_BETA  = 2;
+const Z_SCORE     = 1.96;    // 95% lower confidence bound
+// Half-life for time decay, in number of subsequent observations.
+// After HALF_LIFE_OBS more observations, an old observation contributes 1/2.
+const HALF_LIFE_OBS = 50;
+const DECAY_PER_OBS = Math.pow(0.5, 1 / HALF_LIFE_OBS); // ≈ 0.9862
 
 export interface ActionRow {
   action_id: string;
@@ -70,6 +92,37 @@ export class Store {
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(SCHEMA);
+    this.migrateTrust();
+  }
+
+  // Lightweight forward-migration for stores created on the v0 trust schema
+  // (just `score`, `n`). Adds alpha/beta/last_worth columns and seeds them
+  // from the cumulative-average state so existing trust isn't lost.
+  private migrateTrust(): void {
+    const cols = this.db
+      .prepare(`PRAGMA table_info(trust)`)
+      .all() as Array<{ name: string }>;
+    const has = (name: string) => cols.some((c) => c.name === name);
+    const run = (sql: string) => this.db.prepare(sql).run();
+    if (!has("alpha")) {
+      run(`ALTER TABLE trust ADD COLUMN alpha REAL NOT NULL DEFAULT ${PRIOR_ALPHA}`);
+    }
+    if (!has("beta")) {
+      run(`ALTER TABLE trust ADD COLUMN beta  REAL NOT NULL DEFAULT ${PRIOR_BETA}`);
+    }
+    if (!has("last_worth")) {
+      run(`ALTER TABLE trust ADD COLUMN last_worth REAL`);
+    }
+    // Seed alpha/beta from the legacy (score, n) for any rows that still
+    // have prior defaults — pretend the average represents n weighted obs.
+    this.db
+      .prepare(
+        `UPDATE trust
+            SET alpha = ${PRIOR_ALPHA} + score * n,
+                beta  = ${PRIOR_BETA}  + (1 - score) * n
+          WHERE alpha = ${PRIOR_ALPHA} AND beta = ${PRIOR_BETA} AND n > 0`,
+      )
+      .run();
   }
 
   insertAction(row: ActionRow): void {
@@ -128,30 +181,70 @@ export class Store {
       );
   }
 
-  // Trust score: rolling average of worth per category. Floor 0, cap 1.
-  // n keeps the average from being yanked by a single outlier outcome.
-  getTrust(category: string): { score: number; n: number } {
+  // Trust score: lower confidence bound of a Beta-Bernoulli posterior
+  // with time-decayed evidence. Conservative for new categories (small n
+  // → wide CI → low score), stable for proven ones (large n → tight CI
+  // → score ≈ mean), and capable of changing direction (decay weights
+  // recent observations more than ancient ones).
+  getTrust(category: string): TrustView {
     const row = this.db
-      .prepare(`SELECT score, n FROM trust WHERE category = ?`)
-      .get(category) as { score: number; n: number } | undefined;
-    return row ?? { score: 0.5, n: 0 };
+      .prepare(
+        `SELECT score, n, alpha, beta, last_worth FROM trust WHERE category = ?`,
+      )
+      .get(category) as
+      | { score: number; n: number; alpha: number; beta: number; last_worth: number | null }
+      | undefined;
+    if (!row) {
+      return {
+        score: lcb(PRIOR_ALPHA, PRIOR_BETA),
+        mean: PRIOR_ALPHA / (PRIOR_ALPHA + PRIOR_BETA),
+        confidence: 1 - lcbHalfWidth(PRIOR_ALPHA, PRIOR_BETA),
+        n: 0,
+        alpha: PRIOR_ALPHA,
+        beta: PRIOR_BETA,
+      };
+    }
+    return {
+      score: row.score,
+      mean: row.alpha / (row.alpha + row.beta),
+      confidence: 1 - lcbHalfWidth(row.alpha, row.beta),
+      n: row.n,
+      alpha: row.alpha,
+      beta: row.beta,
+    };
   }
 
   updateTrust(category: string, worth: number): { before: number; after: number } {
     const cur = this.getTrust(category);
-    const n = cur.n + 1;
-    const after = Math.max(0, Math.min(1, (cur.score * cur.n + worth) / n));
+    const w = clamp01(worth);
+
+    // Decay all prior evidence toward the prior. This makes "stale trust"
+    // a non-issue — categories that haven't been observed recently drift
+    // back toward the uniform prior.
+    const decayedAlpha = (cur.alpha - PRIOR_ALPHA) * DECAY_PER_OBS + PRIOR_ALPHA;
+    const decayedBeta  = (cur.beta  - PRIOR_BETA ) * DECAY_PER_OBS + PRIOR_BETA;
+
+    // Apply this observation. worth in [0,1] decomposes as w successes,
+    // (1-w) failures — the standard continuous Bernoulli interpretation.
+    const newAlpha = decayedAlpha + w;
+    const newBeta  = decayedBeta  + (1 - w);
+    const newScore = lcb(newAlpha, newBeta);
+    const newN     = cur.n + 1;
+
     this.db
       .prepare(
-        `INSERT INTO trust (category, score, n, updated_at)
-         VALUES (?, ?, ?, ?)
+        `INSERT INTO trust (category, score, n, alpha, beta, last_worth, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(category) DO UPDATE SET
-           score = excluded.score,
-           n     = excluded.n,
+           score      = excluded.score,
+           n          = excluded.n,
+           alpha      = excluded.alpha,
+           beta       = excluded.beta,
+           last_worth = excluded.last_worth,
            updated_at = excluded.updated_at`,
       )
-      .run(category, after, n, new Date().toISOString());
-    return { before: cur.score, after };
+      .run(category, newScore, newN, newAlpha, newBeta, w, new Date().toISOString());
+    return { before: cur.score, after: newScore };
   }
 
   updateActionVerdict(
@@ -187,13 +280,66 @@ export class Store {
       .all() as ActionRow[];
   }
 
-  trustScores(): Array<{ category: string; score: number; n: number }> {
-    return this.db
-      .prepare(`SELECT category, score, n FROM trust ORDER BY n DESC`)
-      .all() as Array<{ category: string; score: number; n: number }>;
+  trustScores(): Array<TrustView & { category: string }> {
+    const rows = this.db
+      .prepare(
+        `SELECT category, score, n, alpha, beta FROM trust ORDER BY n DESC`,
+      )
+      .all() as Array<{
+        category: string;
+        score: number;
+        n: number;
+        alpha: number;
+        beta: number;
+      }>;
+    return rows.map((r) => ({
+      category: r.category,
+      score: r.score,
+      mean: r.alpha / (r.alpha + r.beta),
+      confidence: 1 - lcbHalfWidth(r.alpha, r.beta),
+      n: r.n,
+      alpha: r.alpha,
+      beta: r.beta,
+    }));
   }
 
   close(): void {
     this.db.close();
   }
+}
+
+// ── Bayesian helpers ────────────────────────────────────────────────────
+// Beta-Bernoulli posterior:
+//   mean   = α / (α+β)
+//   var    = αβ / ((α+β)² · (α+β+1))
+//   stddev = sqrt(var)
+//   LCB    = max(0, mean − Z · stddev)
+//
+// LCB (lower confidence bound) is what gates use as the trust score.
+// Conservative for new categories (small α+β → wide CI → small LCB),
+// asymptotic to mean for proven ones (large α+β → tight CI → LCB ≈ mean).
+
+export interface TrustView {
+  score: number;       // lower confidence bound, 0..1 — what the gate consumes
+  mean: number;        // posterior mean, 0..1
+  confidence: number;  // 1 - half_width, 0..1 — narrow CI ⇒ high confidence
+  n: number;
+  alpha: number;
+  beta: number;
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function lcb(alpha: number, beta: number): number {
+  const mean = alpha / (alpha + beta);
+  return clamp01(mean - lcbHalfWidth(alpha, beta));
+}
+
+function lcbHalfWidth(alpha: number, beta: number): number {
+  const sum = alpha + beta;
+  const variance = (alpha * beta) / (sum * sum * (sum + 1));
+  return Z_SCORE * Math.sqrt(variance);
 }

@@ -27,7 +27,7 @@ import type { SupervisorConfig } from "./supervisors/index.js";
 
 export * from "./types.js";
 export { SupervisionEngine, DEFAULT_ROLES } from "./engine.js";
-export { Store } from "./store.js";
+export { Store, type TrustView } from "./store.js";
 export { createSupervisor } from "./supervisors/index.js";
 
 export interface AgentOSConfig {

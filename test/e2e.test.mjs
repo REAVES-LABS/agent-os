@@ -181,7 +181,109 @@ test("gate() honors every documented branch", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// 5. Graceful fallback — supervisor failure shouldn't crash the engine
+// 5. Bayesian trust math — the load-bearing differentiator vs naive averages
+// ──────────────────────────────────────────────────────────────────────────
+
+import { Store } from "../dist/store.js";
+
+function freshStore() {
+  const workdir = freshWorkdir();
+  return { store: new Store(`${workdir}/state.db`), workdir };
+}
+
+test("new categories start conservative — earn trust before auto-execute", () => {
+  const { store, workdir } = freshStore();
+  try {
+    const t = store.getTrust("brand_new_category");
+    // Naive average would say 0.5. Bayesian LCB with prior(2,2) is ≈ 0.06.
+    // The whole point: a new category is NOT trusted by default.
+    assert.ok(t.score < 0.2, `expected conservative LCB <0.2, got ${t.score}`);
+    assert.equal(t.n, 0);
+    assert.equal(t.alpha, 2);
+    assert.equal(t.beta, 2);
+    // Mean is 0.5 (uniform-ish prior) but the LCB the gate sees is ≪ mean.
+    assert.equal(t.mean, 0.5);
+    assert.ok(t.confidence < 0.6, `confidence should be low for prior, got ${t.confidence}`);
+  } finally {
+    store.close();
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("trust climbs but stays below the mean as n grows (LCB asymptote)", () => {
+  const { store, workdir } = freshStore();
+  try {
+    // 100 high-worth outcomes for the same category. Decay brings the
+    // effective n to ~50 (half-life), so steady-state α≈67, β≈9.
+    for (let i = 0; i < 100; i++) store.updateTrust("ship_pr", 0.9);
+    const t = store.getTrust("ship_pr");
+    // Mean approaches 0.88 (decay-weighted average of 0.9 outcomes).
+    assert.ok(t.mean > 0.85, `mean should approach 0.9 minus decay drift, got ${t.mean}`);
+    assert.ok(t.score < t.mean, "LCB must be ≤ mean");
+    // LCB should be substantially higher than the prior LCB (~0.06)
+    // — proving consistent good outcomes lift the gate-visible score.
+    assert.ok(t.score > 0.75, `LCB should be ≫ prior after 100 good outcomes, got ${t.score}`);
+    assert.ok(t.confidence > 0.9, `confidence should be high, got ${t.confidence}`);
+  } finally {
+    store.close();
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("recent bad outcomes pull trust down (decay actually decays)", () => {
+  const { store, workdir } = freshStore();
+  try {
+    // Establish strong trust
+    for (let i = 0; i < 100; i++) store.updateTrust("send_email", 0.95);
+    const high = store.getTrust("send_email");
+
+    // Now hit it with a stretch of bad outcomes
+    for (let i = 0; i < 20; i++) store.updateTrust("send_email", 0.05);
+    const after = store.getTrust("send_email");
+
+    assert.ok(
+      after.score < high.score - 0.15,
+      `bad outcomes should drop score by >0.15, was ${high.score} → ${after.score}`,
+    );
+  } finally {
+    store.close();
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("uncertainty penalty: small-n category gets meaningfully less trust than large-n", () => {
+  const { store, workdir } = freshStore();
+  try {
+    // Both observe worth=0.85 every time, but rare has only 3 obs, common has 50.
+    // The Beta(2,2) prior pulls a small-n posterior toward 0.5, AND the LCB
+    // half-width is much wider with less data. Both effects penalize uncertainty.
+    for (let i = 0; i < 3; i++) store.updateTrust("rare_action", 0.85);
+    for (let i = 0; i < 50; i++) store.updateTrust("common_action", 0.85);
+
+    const rare = store.getTrust("rare_action");
+    const common = store.getTrust("common_action");
+
+    // The score gap should be substantial — this is the whole point of the upgrade.
+    // A naive cumulative average would give them similar trust scores.
+    assert.ok(
+      common.score > rare.score + 0.1,
+      `common (n=50) trust should exceed rare (n=3) by >0.1, got ${rare.score.toFixed(3)} vs ${common.score.toFixed(3)}`,
+    );
+    // Confidence (1 - half-width) should also be higher for the common category.
+    assert.ok(
+      common.confidence > rare.confidence + 0.1,
+      `common confidence should exceed rare by >0.1, got ${rare.confidence.toFixed(3)} vs ${common.confidence.toFixed(3)}`,
+    );
+    // And the mean for rare is dragged toward the prior (0.5) while common's mean is closer to 0.85.
+    assert.ok(rare.mean < common.mean, "small-n mean is pulled toward prior 0.5");
+  } finally {
+    store.close();
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// 6. Graceful fallback — supervisor failure shouldn't crash the engine
 // ──────────────────────────────────────────────────────────────────────────
 
 test("supervisor errors degrade to verdict=supervised, not crash", async (t) => {
