@@ -2,14 +2,16 @@
 
 > Ship agents that don't go off the rails.
 
+**A drop-in MCP supervisor that gates every agent action with a verdict — `auto` / `supervised` / `escalate` — and a per-category trust score that rises and falls based on observed outcomes, so risky categories stay held back while proven ones run unattended.** The safety floor is a *pure deterministic function*: irreversibility (wire money, delete prod, post publicly) always escalates, even when the supervisor LLM is 99% confident it's fine.
+
 > [!IMPORTANT]
 > **2026-05-07 — Source-available preview (Phase 1).**
 > The code is here for evaluation, transparency, and validation. **Pull requests and public issues are not yet accepted** — see [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the phased OSS plan and [`SECURITY.md`](./SECURITY.md) for vulnerability reports.
 
-A drop-in supervision layer for AI agents. Speaks **MCP**. **LLM-agnostic** —
-swap Anthropic, OpenAI, Ollama, or any OpenAI-compatible endpoint with one
-env var. Persists to SQLite, writes to a filesystem outbox, queues risky
-actions for human approval.
+**LLM-agnostic.** Swap Anthropic, OpenAI, Ollama, or any OpenAI-compatible
+endpoint (Groq, Together, vLLM, llama.cpp) with one env var. Persists to
+SQLite, writes auto-execute actions to a filesystem outbox, queues risky
+ones for human approval.
 
 This is the reference implementation of YC RFS #04 (Company Brain) and
 \#12 (Software for Agents): machine-native paths, permissions, recovery.
