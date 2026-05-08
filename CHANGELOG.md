@@ -42,11 +42,14 @@ this release is for **evaluation, transparency, and validation** only.
 - **CLI** (`agent-os`) — `submit`, `outcome`, `status`, `serve`, `route`, `recover`
 - **Filesystem effectors** — `auto` verdicts land at `~/.agent-os/outbox/<role>/`,
   `supervised`/`escalate` queue at `~/.agent-os/queues/approval/`
-- **Beta-Bernoulli trust scoring** with time decay (half-life 50 obs):
-  - Lower confidence bound (z=1.96) is what the gate reads as "score"
-  - Posterior mean and confidence exposed for diagnostics
-  - Conservative for new categories (LCB ≈ 0.06 with prior α=β=2)
-  - Decays old evidence so categories aren't permanently locked-in
+- **Trust scoring that learns over time** — every action category
+  (e.g., `send_email`) accumulates a confidence score that rises when
+  outcomes are good and falls when they aren't. New categories start
+  *low* on purpose (about 0.06 out of 1) so the agent has to *earn*
+  auto-execute. Old observations gradually fade so a category that was
+  trustworthy six months ago and flaky now is treated as flaky. *(For
+  the math: lower confidence bound of a Beta-Bernoulli posterior with
+  α=β=2 prior, z=1.96, 50-observation half-life decay. See `src/store.ts`.)*
 - **Behavioral test suite** — 10 tests covering: submit/verdict, outcome/trust,
   irreversibility floor, gate() branches, supervisor failure fallback,
   conservative-start, LCB asymptote, decay-driven drop, uncertainty penalty

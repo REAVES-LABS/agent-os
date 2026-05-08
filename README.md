@@ -158,19 +158,57 @@ await os.recordOutcome({
 
 ## How verdicts work
 
-The verifier scores three axes plus an overall score, and the engine
-applies an irreversibility floor that the LLM can't override:
+Three things decide whether an action runs unattended, gets held for
+review, or gets bounced back: how hard the action is to undo, how
+confident the LLM is that it's safe right now, and how trustworthy
+this *kind* of action has been historically.
+
+**1. The safety floor — risk of undoing.** Every action is tagged
+with one of three reversibility levels:
+
+- `reversible` — file write, draft email, scratch directory ops; anything you could `Ctrl-Z`
+- `external` — anything visible to the outside world (post a tweet, send an email, charge a card)
+- `irreversible` — wire money, delete production, fire someone
+
+Irreversible actions **always escalate**, no matter how confident the
+LLM is. External actions get bumped from `auto` down to `supervised`
+even if the LLM says they look fine. This is the load-bearing safety
+property: the LLM is an *advisor*, not the decision-maker. Confidence
+cannot override category.
+
+**2. The verdict — LLM's read on this specific request.** The
+supervisor returns a verdict (`auto` / `supervised` / `escalate`) and
+a confidence score (0–1). Below 0.5, we escalate even reversible
+actions. Between 0.5 and 0.8, the strongest verdict we trust is
+"supervised." At 0.8 and above, we accept the LLM's verdict directly
+(but the irreversibility floor still applies — an irreversible action
+at 0.99 still escalates).
+
+**3. Trust score — has this *kind* of action been trustworthy
+before?** For each category (`send_email`, `wire_money`, `commit_pr`,
+etc.) we track how well past actions of that kind turned out. New
+categories start at low trust (~0.06) — you *earn* auto-execute by
+recording good outcomes. Bad outcomes pull the score down; old
+outcomes decay, so a category that was reliable six months ago and
+flaky now is treated as flaky.
+
+The complete decision rule, in code:
 
 ```
-irreversibility="irreversible"  →  always "escalate"
+irreversibility="irreversible"               →  always "escalate"
 irreversibility="external" + verdict="auto"  →  downgrade to "supervised"
-score < 0.5  →  "escalate"
-score < 0.8  →  "supervised"
-score >= 0.8  →  whatever the LLM said (auto / supervised)
+score < 0.5                                  →  "escalate"
+score < 0.8                                  →  "supervised"
+score >= 0.8                                 →  whatever the LLM said
 ```
 
-Trust scores per category are a rolling average of `worth = c × q × i`.
-`n` keeps a single bad outcome from yanking a stable category off the floor.
+**For the math.** The trust score is the *lower confidence bound* of
+a Beta-Bernoulli posterior over per-category outcomes, with a (α=2, β=2)
+uniform-ish prior and time-decayed evidence (50-observation half-life).
+Variance penalty is z=1.96 (95% LCB). See [`src/store.ts`](./src/store.ts)
+for the exact update rule and [`test/e2e.test.mjs`](./test/e2e.test.mjs)
+for the behavioral invariants the math has to satisfy (conservative
+start, LCB asymptote, decay-driven drop, uncertainty penalty).
 
 ---
 
